@@ -41,6 +41,11 @@ endif()
 
 option(SLIC3R_STATIC 			"Compile BambuStudio with static libraries (Boost, TBB, glew)" ${SLIC3R_STATIC_INITIAL})
 option(SLIC3R_GUI    			"Compile BambuStudio with GUI components (OpenGL, wxWidgets)" 1)
+# iPad port: build only libslic3r + ios/core (no GUI, no desktop executable).
+option(SLIC3R_CORE_ONLY         "Build only libslic3r and the GUI-free slicing core in ios/core" 0)
+if (SLIC3R_CORE_ONLY)
+    set(SLIC3R_GUI 0 CACHE BOOL "" FORCE)
+endif ()
 option(SLIC3R_FHS               "Assume BambuStudio is to be installed in a FHS directory structure" 0)
 option(SLIC3R_WX_STABLE         "Build against wxWidgets stable (3.0) as oppsed to dev (3.1) on Linux" 0)
 option(SLIC3R_PROFILE 			"Compile BambuStudio with an invasive Shiny profiler" 0)
@@ -547,6 +552,8 @@ find_package(TBB REQUIRED)
 # add_definitions(-DTBB_USE_CAPTURED_EXCEPTION=0)
 
 find_package(OpenSSL REQUIRED)
+find_package(ZLIB REQUIRED)
+if (NOT SLIC3R_CORE_ONLY)
 if (APPLE)
 find_package(CURL CONFIG REQUIRED)
 else()
@@ -555,9 +562,8 @@ endif()
 
 add_library(libcurl INTERFACE)
 target_link_libraries(libcurl INTERFACE CURL::libcurl)
-
-find_package(ZLIB REQUIRED)
 target_link_libraries(libcurl INTERFACE ZLIB::ZLIB)
+endif () # NOT SLIC3R_CORE_ONLY
 
 # Fixing curl's cmake config script bugs
 if (NOT WIN32)
@@ -617,6 +623,7 @@ endif ()
 
 find_package(PNG REQUIRED)
 
+if (NOT SLIC3R_CORE_ONLY)
 set(OpenGL_GL_PREFERENCE "LEGACY")
 find_package(OpenGL REQUIRED)
 
@@ -629,6 +636,7 @@ endif()
 find_package(GLEW REQUIRED)
 
 find_package(glfw3 REQUIRED)
+endif () # NOT SLIC3R_CORE_ONLY
 
 # Find the Cereal serialization library
 find_package(cereal REQUIRED)

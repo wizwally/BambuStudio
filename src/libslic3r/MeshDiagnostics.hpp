@@ -3,6 +3,8 @@
 
 #include <admesh/stl.h>
 
+#include "Point.hpp" // Vec3i (was only reachable through the precompiled header)
+
 #include <vector>
 
 namespace Slic3r {

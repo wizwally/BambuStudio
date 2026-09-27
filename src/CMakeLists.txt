@@ -43,6 +43,12 @@ find_package(libnoise REQUIRED)
 
 add_subdirectory(libslic3r)
 
+# iPad port: stop here and build the GUI-free core instead of the desktop app.
+if (SLIC3R_CORE_ONLY)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/ios/core ${CMAKE_BINARY_DIR}/ios_core)
+    return()
+endif ()
+
 if (SLIC3R_GUI)
     add_subdirectory(imgui)
     add_subdirectory(imguizmo)
