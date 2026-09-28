@@ -30,7 +30,7 @@ file(MAKE_DIRECTORY "${PREFIX}/include" "${PREFIX}/lib")
 find_package(Git REQUIRED)
 set(PATCH_CMD ${GIT_EXECUTABLE} apply --verbose --ignore-space-change --whitespace=fix)
 # Upstream recipes run "git apply --directory <build dir relative to repo root>".
-set(IN_GIT_REPO TRUE)
+# IN_GIT_REPO stays unset, as in upstream deps/CMakeLists.txt (CGAL patch fails with it).
 file(RELATIVE_PATH BINARY_DIR_REL "${REPO_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}")
 
 execute_process(COMMAND xcrun --sdk iphoneos --show-sdk-path
