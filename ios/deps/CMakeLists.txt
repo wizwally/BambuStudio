@@ -79,7 +79,7 @@ set(IOS_CMAKE_ARGS
 
 # Per-project extra arguments, appended last so they win over the recipe's own -D.
 set(IOS_EXTRA_Boost
-    "-DBOOST_EXCLUDE_LIBRARIES=contract|fiber|numpy|wave|test|context|coroutine|cobalt|stacktrace|python|mpi|graph_parallel|process"
+    "-DBOOST_EXCLUDE_LIBRARIES=contract|fiber|numpy|wave|test|coroutine|cobalt|stacktrace|python|mpi|graph_parallel|process"
     -DBOOST_IOSTREAMS_ENABLE_ZSTD=OFF
     -DBOOST_IOSTREAMS_ENABLE_LZMA=OFF
     -DBOOST_IOSTREAMS_ENABLE_BZIP2=OFF
@@ -193,7 +193,7 @@ ExternalProject_Add(dep_OpenSSL
     BUILD_IN_SOURCE ON
     CONFIGURE_COMMAND ./Configure ios64-xcrun
         -mios-version-min=${IOS_DEPLOYMENT_TARGET}
-        no-shared no-asm no-tests no-dso no-engine no-apps no-ssl3-method no-dynamic-engine
+        no-shared no-asm no-tests no-dso no-engine no-ssl3-method no-dynamic-engine
         --prefix=${PREFIX} --openssldir=${PREFIX}
     BUILD_COMMAND make -j${NPROC} build_libs
     INSTALL_COMMAND make install_dev
