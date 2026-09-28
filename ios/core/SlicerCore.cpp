@@ -16,7 +16,7 @@
 #include "libslic3r/GCode/GCodeProcessor.hpp"
 
 #include <boost/filesystem.hpp>
-#include <tbb/global_control.h>
+#include <tbb/task_arena.h>
 
 #include <chrono>
 #include <memory>
@@ -95,15 +95,12 @@ PresetNames list_presets(const std::string& resources_dir, const std::string& da
     return out;
 }
 
-Result slice(const Request& req, const ProgressFn& progress)
+namespace {
+
+Result slice_impl(const Request& req, const ProgressFn& progress)
 {
     Result res;
     auto report = [&](int pct, const std::string& msg) { if (progress) progress(pct, msg); };
-
-    std::unique_ptr<tbb::global_control> thread_limit;
-    if (req.max_threads > 0)
-        thread_limit = std::make_unique<tbb::global_control>(tbb::global_control::max_allowed_parallelism,
-                                                             static_cast<size_t>(req.max_threads));
 
     try {
         auto t0 = std::chrono::steady_clock::now();
@@ -187,6 +184,25 @@ Result slice(const Request& req, const ProgressFn& progress)
     }
 
     res.peak_rss_bytes = peak_rss_bytes();
+    return res;
+}
+
+} // namespace
+
+Result slice(const Request& req, const ProgressFn& progress)
+{
+    if (req.max_threads <= 0)
+        return slice_impl(req, progress);
+
+    // Limit parallelism with a dedicated arena, NOT tbb::global_control.
+    // libslic3r's name_tbb_thread_pool_threads_set_locale() (called from
+    // Print::process) runs a barrier sized on this_task_arena::max_concurrency():
+    // with global_control capping the workers below that value, the barrier never
+    // completes and slicing deadlocks (seen on macOS with 10 cores and 3 threads).
+    // Inside an arena, max_concurrency() equals the limit and the barrier is met.
+    tbb::task_arena arena(req.max_threads);
+    Result res;
+    arena.execute([&] { res = slice_impl(req, progress); });
     return res;
 }
 
