@@ -30,8 +30,11 @@
 		#include <sys/sysctl.h>
 	#endif
 	#ifdef __APPLE__
+		#include <TargetConditionals.h>
 		#include <mach/mach.h>
-		#include <libproc.h>
+		#if !TARGET_OS_IPHONE
+			#include <libproc.h> // macOS only; not in the iOS SDK
+		#endif
 	#endif
 	#ifdef __linux__
 		#include <sys/stat.h>
@@ -1203,6 +1206,10 @@ std::string get_process_name(int pid)
 	while (auto q = strchr(p + 1, '\\'))
 		p = q;
 	return decode_path(p);
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+	// iOS: no libproc; an app can only name itself.
+	if (pid != 0 && pid != ::getpid()) return {};
+	return getprogname();
 #elif defined __APPLE__
 	char pathbuf[PROC_PIDPATHINFO_MAXSIZE] = { 0 };
 	if (pid == 0) pid = ::getpid();

@@ -45,7 +45,9 @@ if [ "${1:-}" != "-b" ]; then
         -DBBL_RELEASE_TO_PUBLIC=1 \
         -DBBL_INTERNAL_TESTING=0
 fi
-cmake --build . --target slicer_core slicer_core_gui_shims
+# -k 0: keep compiling after errors, so one run shows all of them
+KEEP_GOING="-k"; [ "$GEN" = "Ninja" ] && KEEP_GOING="-k 0"
+cmake --build . --target slicer_core slicer_core_gui_shims -- $KEEP_GOING
 
 echo "=== packaging"
 PKG="$OUT/pkg"
