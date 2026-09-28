@@ -199,8 +199,9 @@ ExternalProject_Add(dep_OpenSSL
     URL_HASH SHA256=8c776993154652d0bb393f506d850b811517c8bd8d24b1008aef57fbe55d3f31
     DOWNLOAD_DIR ${DEP_DOWNLOAD_DIR}/OpenSSL
     BUILD_IN_SOURCE ON
-    CONFIGURE_COMMAND ./Configure ${OPENSSL_IOS_TARGET}
-        -arch arm64 ${IOS_MIN_FLAG}
+    # Flags go through CFLAGS: on the Configure command line "arm64" would be
+    # read as a second target name.
+    CONFIGURE_COMMAND env "CFLAGS=-arch arm64 ${IOS_MIN_FLAG}" ./Configure ${OPENSSL_IOS_TARGET}
         no-shared no-asm no-tests no-dso no-engine no-ssl3-method no-dynamic-engine
         --prefix=${PREFIX} --openssldir=${PREFIX}
     BUILD_COMMAND make -j${NPROC} build_libs
