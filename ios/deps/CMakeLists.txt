@@ -22,6 +22,14 @@ get_filename_component(REPO_ROOT "${REPO_ROOT}" ABSOLUTE)
 set(UPSTREAM_DEPS "${REPO_ROOT}/deps")
 
 set(IOS_DEPLOYMENT_TARGET "17.0" CACHE STRING "Minimum iPadOS version")
+set(IOS_PLATFORM "iphoneos" CACHE STRING "iphoneos (device) or iphonesimulator")
+if (IOS_PLATFORM STREQUAL "iphonesimulator")
+    set(IOS_MIN_FLAG "-mios-simulator-version-min=${IOS_DEPLOYMENT_TARGET}")
+    set(OPENSSL_IOS_TARGET iossimulator-xcrun)
+else ()
+    set(IOS_MIN_FLAG "-mios-version-min=${IOS_DEPLOYMENT_TARGET}")
+    set(OPENSSL_IOS_TARGET ios64-xcrun)
+endif ()
 set(DESTDIR "${CMAKE_CURRENT_BINARY_DIR}/BambuStudio_deps" CACHE PATH "Install root")
 set(DEP_DOWNLOAD_DIR "${CMAKE_CURRENT_BINARY_DIR}/download" CACHE PATH "Download cache")
 set(PREFIX "${DESTDIR}/usr/local")
@@ -33,16 +41,16 @@ set(PATCH_CMD ${GIT_EXECUTABLE} apply --verbose --ignore-space-change --whitespa
 # IN_GIT_REPO stays unset, as in upstream deps/CMakeLists.txt (CGAL patch fails with it).
 file(RELATIVE_PATH BINARY_DIR_REL "${REPO_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}")
 
-execute_process(COMMAND xcrun --sdk iphoneos --show-sdk-path
+execute_process(COMMAND xcrun --sdk ${IOS_PLATFORM} --show-sdk-path
                 OUTPUT_VARIABLE IOS_SDK OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND xcrun --sdk iphoneos --find clang
+execute_process(COMMAND xcrun --sdk ${IOS_PLATFORM} --find clang
                 OUTPUT_VARIABLE IOS_CC OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND xcrun --sdk iphoneos --find clang++
+execute_process(COMMAND xcrun --sdk ${IOS_PLATFORM} --find clang++
                 OUTPUT_VARIABLE IOS_CXX OUTPUT_STRIP_TRAILING_WHITESPACE)
 if (NOT IOS_SDK OR NOT EXISTS "${IOS_SDK}")
     message(FATAL_ERROR "iPhoneOS SDK not found: is Xcode installed and selected (xcode-select -p)?")
 endif ()
-message(STATUS "iOS SDK: ${IOS_SDK}  (min iPadOS ${IOS_DEPLOYMENT_TARGET})")
+message(STATUS "iOS SDK (${IOS_PLATFORM}): ${IOS_SDK}  (min iPadOS ${IOS_DEPLOYMENT_TARGET})")
 
 # Values some upstream recipes read. The superbuild is native arm64 macOS, so the
 # recipes take their "Apple, not cross compiling" branches.
@@ -51,13 +59,13 @@ set(DEP_OSX_TARGET ${IOS_DEPLOYMENT_TARGET})
 set(IS_CROSS_COMPILE FALSE)
 set(CMAKE_BUILD_TYPE Release)
 
-set(IOS_FLAGS "-arch arm64 -isysroot ${IOS_SDK} -mios-version-min=${IOS_DEPLOYMENT_TARGET}")
+set(IOS_FLAGS "-arch arm64 -isysroot ${IOS_SDK} ${IOS_MIN_FLAG}")
 
 # Arguments every CMake-based dependency gets. The FIND_ROOT_PATH settings keep
 # CMake inside the iOS SDK + our prefix, so nothing leaks in from /opt/homebrew.
 set(IOS_CMAKE_ARGS
     -DCMAKE_SYSTEM_NAME=iOS
-    -DCMAKE_OSX_SYSROOT=iphoneos
+    -DCMAKE_OSX_SYSROOT=${IOS_PLATFORM}
     -DCMAKE_OSX_ARCHITECTURES=arm64
     -DCMAKE_OSX_DEPLOYMENT_TARGET=${IOS_DEPLOYMENT_TARGET}
     -DCMAKE_INSTALL_PREFIX=${PREFIX}
@@ -191,8 +199,8 @@ ExternalProject_Add(dep_OpenSSL
     URL_HASH SHA256=8c776993154652d0bb393f506d850b811517c8bd8d24b1008aef57fbe55d3f31
     DOWNLOAD_DIR ${DEP_DOWNLOAD_DIR}/OpenSSL
     BUILD_IN_SOURCE ON
-    CONFIGURE_COMMAND ./Configure ios64-xcrun
-        -mios-version-min=${IOS_DEPLOYMENT_TARGET}
+    CONFIGURE_COMMAND ./Configure ${OPENSSL_IOS_TARGET}
+        -arch arm64 ${IOS_MIN_FLAG}
         no-shared no-asm no-tests no-dso no-engine no-ssl3-method no-dynamic-engine
         --prefix=${PREFIX} --openssldir=${PREFIX}
     BUILD_COMMAND make -j${NPROC} build_libs

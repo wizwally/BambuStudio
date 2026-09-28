@@ -6,13 +6,21 @@
 # Needs ios_01_deps.sh completed.   Log: ios/logs/ios_02_core.log
 # Usage: ios/scripts/ios_02_core.sh          (configure + build + package)
 #        ios/scripts/ios_02_core.sh -b       (build + package, no reconfigure)
+#        PLATFORM=iphonesimulator ios/scripts/ios_02_core.sh   (Simulator slice)
+# The xcframework gets every slice built so far (device and/or simulator).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEPS="$ROOT/ios/build/deps/BambuStudio_deps/usr/local"
-BUILD="$ROOT/ios/build/core"
+PLATFORM="${PLATFORM:-iphoneos}"
+case "$PLATFORM" in
+    iphoneos)        SUFFIX="" ;;
+    iphonesimulator) SUFFIX="-sim" ;;
+    *) echo "PLATFORM deve essere iphoneos o iphonesimulator"; exit 1 ;;
+esac
+DEPS="$ROOT/ios/build/deps$SUFFIX/BambuStudio_deps/usr/local"
+BUILD="$ROOT/ios/build/core$SUFFIX"
 OUT="$ROOT/ios/build"
-LOG="$ROOT/ios/logs/ios_02_core.log"
+LOG="$ROOT/ios/logs/ios_02_core$SUFFIX.log"
 IOS_MIN="17.0"
 mkdir -p "$BUILD" "$(dirname "$LOG")"
 
@@ -22,12 +30,12 @@ GEN="Unix Makefiles"
 command -v ninja >/dev/null && GEN="Ninja"
 
 {
-echo "=== $(date)"
+echo "=== $(date) platform=$PLATFORM"
 cd "$BUILD"
 if [ "${1:-}" != "-b" ]; then
     cmake "$ROOT" -G "$GEN" -Wno-dev \
         -DCMAKE_SYSTEM_NAME=iOS \
-        -DCMAKE_OSX_SYSROOT=iphoneos \
+        -DCMAKE_OSX_SYSROOT="$PLATFORM" \
         -DCMAKE_OSX_ARCHITECTURES=arm64 \
         -DCMAKE_SYSTEM_PROCESSOR=arm64 \
         -DCMAKE_OSX_DEPLOYMENT_TARGET="$IOS_MIN" \
@@ -50,7 +58,7 @@ KEEP_GOING="-k"; [ "$GEN" = "Ninja" ] && KEEP_GOING="-k 0"
 cmake --build . --target slicer_core slicer_core_gui_shims -- $KEEP_GOING
 
 echo "=== packaging"
-PKG="$OUT/pkg"
+PKG="$OUT/pkg$SUFFIX"
 rm -rf "$PKG" "$OUT/SlicerCore.xcframework"
 mkdir -p "$PKG/include"
 
@@ -61,8 +69,11 @@ DEPLIBS=$(find "$DEPS/lib" -maxdepth 1 -name '*.a' -not -name '*d.a')
 libtool -static -no_warning_for_no_symbols -o "$PKG/libSlicerCore.a" $LIBS $SHIMS $DEPLIBS
 
 cp "$ROOT/ios/core/SlicerCore.hpp" "$PKG/include/"
-xcodebuild -create-xcframework -library "$PKG/libSlicerCore.a" -headers "$PKG/include" \
-    -output "$OUT/SlicerCore.xcframework"
+XCF_ARGS=()
+for P in "$OUT/pkg" "$OUT/pkg-sim"; do
+    [ -f "$P/libSlicerCore.a" ] && XCF_ARGS+=(-library "$P/libSlicerCore.a" -headers "$P/include")
+done
+xcodebuild -create-xcframework "${XCF_ARGS[@]}" -output "$OUT/SlicerCore.xcframework"
 
 echo "OK: $OUT/SlicerCore.xcframework ($(du -sh "$PKG/libSlicerCore.a" | cut -f1))"
 } 2>&1 | tee "$LOG"
