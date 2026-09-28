@@ -79,7 +79,7 @@ set(IOS_CMAKE_ARGS
 
 # Per-project extra arguments, appended last so they win over the recipe's own -D.
 set(IOS_EXTRA_Boost
-    "-DBOOST_EXCLUDE_LIBRARIES=contract|fiber|numpy|wave|test|coroutine|cobalt|stacktrace|python|mpi|graph_parallel|process"
+    "-DBOOST_EXCLUDE_LIBRARIES=contract|fiber|numpy|wave|test|cobalt|stacktrace|python|mpi|graph_parallel"
     -DBOOST_IOSTREAMS_ENABLE_ZSTD=OFF
     -DBOOST_IOSTREAMS_ENABLE_LZMA=OFF
     -DBOOST_IOSTREAMS_ENABLE_BZIP2=OFF

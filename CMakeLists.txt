@@ -46,6 +46,10 @@ option(SLIC3R_CORE_ONLY         "Build only libslic3r and the GUI-free slicing c
 if (SLIC3R_CORE_ONLY)
     set(SLIC3R_GUI 0 CACHE BOOL "" FORCE)
 endif ()
+if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # No fork/exec on iPadOS: G-code post-processing scripts are disabled.
+    add_compile_definitions(SLIC3R_NO_POST_PROCESS_SCRIPTS)
+endif ()
 option(SLIC3R_FHS               "Assume BambuStudio is to be installed in a FHS directory structure" 0)
 option(SLIC3R_WX_STABLE         "Build against wxWidgets stable (3.0) as oppsed to dev (3.1) on Linux" 0)
 option(SLIC3R_PROFILE 			"Compile BambuStudio with an invasive Shiny profiler" 0)

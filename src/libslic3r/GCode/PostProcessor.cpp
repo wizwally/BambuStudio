@@ -144,6 +144,15 @@ static int run_script(const std::string &script, const std::string &gcode, std::
     return (int)execute_process_winapi(command_line);
 }
 
+#elif defined(SLIC3R_NO_POST_PROCESS_SCRIPTS)
+    // iOS/iPadOS: no fork/exec, so user post-processing scripts cannot run.
+
+static int run_script(const std::string & /*script*/, const std::string & /*gcode*/, std::string &std_err)
+{
+    std_err = "Post-processing scripts are not supported on this platform.";
+    return -1;
+}
+
 #else
     // POSIX
 
