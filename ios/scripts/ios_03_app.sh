@@ -51,6 +51,14 @@ xcrun simctl install "$UDID" "$TMPAPP"
 echo "=== autotest"
 xcrun simctl launch --console-pty --terminate-running-process "$UDID" "$BUNDLE_ID" -autotest | grep "AUTOTEST" || true
 
+# Offscreen renders of the 3D view made by the autotest (model / layer preview).
+DATA=$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" data 2>/dev/null || true)
+if [ -n "$DATA" ] && ls "$DATA"/tmp/autotest_*.png >/dev/null 2>&1; then
+    mkdir -p "$ROOT/ios/logs/autotest"
+    cp "$DATA"/tmp/autotest_*.png "$ROOT/ios/logs/autotest/"
+    echo "Immagini autotest: ios/logs/autotest/"
+fi
+
 if [ "${1:-}" = "--open" ]; then
     open -a Simulator
     xcrun simctl launch "$UDID" "$BUNDLE_ID"

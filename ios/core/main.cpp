@@ -6,6 +6,9 @@
 //       --threads 3 --out out.gcode model.stl
 //
 //   bbs-core-slice --resources ... --data ... --list [--printer "..."]
+//
+//   --preview also loads the placed mesh and collects the toolpaths (as the iPad
+//   3D view does) and prints their statistics.
 
 #include "SlicerCore.hpp"
 
@@ -18,7 +21,7 @@
 static void usage()
 {
     std::cerr << "usage: bbs-core-slice --resources DIR --data DIR --printer NAME --process NAME\n"
-                 "                      --filament NAME [--filament NAME ...] [--threads N] --out FILE MODEL\n"
+                 "                      --filament NAME [--filament NAME ...] [--threads N] [--preview] --out FILE MODEL\n"
                  "       bbs-core-slice --resources DIR --data DIR --list [--printer NAME]\n";
 }
 
@@ -26,6 +29,7 @@ int main(int argc, char** argv)
 {
     SlicerCore::Request req;
     bool list = false;
+    bool preview = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -42,6 +46,7 @@ int main(int argc, char** argv)
         else if (a == "--threads")   req.max_threads = std::atoi(next().c_str());
         else if (a == "--out")       req.output_gcode = next();
         else if (a == "--list")      list = true;
+        else if (a == "--preview")   preview = true;
         else if (a == "-h" || a == "--help") { usage(); return 0; }
         else if (!a.empty() && a[0] == '-') { std::cerr << "unknown option " << a << "\n"; usage(); return 2; }
         else req.model_path = a;
@@ -66,6 +71,15 @@ int main(int argc, char** argv)
         return 2;
     }
 
+    if (preview) {
+        auto m = SlicerCore::load_mesh(req);
+        if (!m.ok) { std::printf("mesh_error=%s\n", m.error.c_str()); return 1; }
+        std::printf("mesh_triangles=%zu bbox=[%.3f %.3f %.3f]-[%.3f %.3f %.3f] bed_points=%zu bed_height=%.0f\n",
+                    m.triangle_count, m.min[0], m.min[1], m.min[2], m.max[0], m.max[1], m.max[2],
+                    m.bed_outline.size() / 2, m.bed_height);
+        req.collect_toolpaths = true;
+    }
+
     auto r = SlicerCore::slice(req, [](int pct, const std::string& msg) {
         std::fprintf(stderr, "[%3d%%] %s\n", pct, msg.c_str());
     });
@@ -77,5 +91,17 @@ int main(int argc, char** argv)
     std::printf("peak_rss_mb=%.0f layers=%zu est_print_min=%.1f\n",
                 r.peak_rss_bytes / (1024.0 * 1024.0), r.layer_count, r.estimated_print_seconds / 60.0);
     if (r.ok) std::printf("gcode=%s\n", r.gcode_path.c_str());
+    if (preview && r.ok) {
+        const auto& tp = r.toolpaths;
+        std::printf("toolpath_segments=%zu toolpath_layers=%zu", tp.segment_count(), tp.layer_count());
+        if (tp.layer_count() > 0)
+            std::printf(" z=[%.2f..%.2f]", tp.layer_z.front(), tp.layer_z.back());
+        std::printf("\n");
+        std::size_t per_role[64] = {};
+        for (std::size_t i = 0; i < tp.segment_count(); ++i)
+            ++per_role[std::size_t(tp.segments[i * SlicerCore::kToolpathFloats + 8]) & 63];
+        for (int role = 0; role < 64; ++role)
+            if (per_role[role]) std::printf("  role %2d %-28s %zu\n", role, SlicerCore::role_name(role).c_str(), per_role[role]);
+    }
     return r.ok ? 0 : 1;
 }

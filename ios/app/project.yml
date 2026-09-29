@@ -32,6 +32,8 @@ targets:
       - sdk: libiconv.tbd
       - sdk: Foundation.framework
       - sdk: ModelIO.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
       - sdk: CoreFoundation.framework
     settings:
       base:
