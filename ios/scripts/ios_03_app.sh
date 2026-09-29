@@ -41,7 +41,13 @@ echo "App: $(du -sh "$APP" | cut -f1), eseguibile: $(du -sh "$APP/SlicerPoC" | c
 
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null
-xcrun simctl install "$UDID" "$APP"
+# Install from a fresh copy in $TMPDIR: installing straight from the project
+# folder failed with "Missing bundle ID" (file access from the Simulator service).
+echo "Bundle ID nel pacchetto: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" 2>&1)"
+TMPAPP="${TMPDIR:-/tmp}/SlicerPoC.app"
+rm -rf "$TMPAPP"
+ditto "$APP" "$TMPAPP"
+xcrun simctl install "$UDID" "$TMPAPP"
 echo "=== autotest"
 xcrun simctl launch --console-pty --terminate-running-process "$UDID" "$BUNDLE_ID" -autotest | grep "AUTOTEST" || true
 
