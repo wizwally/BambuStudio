@@ -65,7 +65,7 @@ mkdir -p "$PKG/include"
 # Our static libraries and the shim objects, plus every dependency archive.
 LIBS=$(find "$BUILD" -name '*.a' -not -path '*/CMakeFiles/*')
 SHIMS=$(find "$BUILD" -path '*slicer_core_gui_shims*' -name '*.o')
-DEPLIBS=$(find "$DEPS/lib" -maxdepth 1 -name '*.a' -not -name '*d.a')
+DEPLIBS=$(find "$DEPS/lib" -maxdepth 1 -name '*.a')   # no suffix filter: libboost_thread.a, libTKG2d.a end in d.a
 libtool -static -no_warning_for_no_symbols -o "$PKG/libSlicerCore.a" $LIBS $SHIMS $DEPLIBS
 
 cp "$ROOT/ios/core/SlicerCore.hpp" "$PKG/include/"

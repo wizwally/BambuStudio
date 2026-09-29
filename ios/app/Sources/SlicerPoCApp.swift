@@ -151,7 +151,7 @@ struct ContentView: View {
                     ForEach(model.runs) { run in
                         VStack(alignment: .leading) {
                             Text(run.model).font(.headline)
-                            Text(run.summary).font(.caption).foregroundStyle(run.result.ok ? .primary : .red)
+                            Text(run.summary).font(.caption).foregroundStyle(run.result.ok ? Color.primary : Color.red)
                         }
                     }
                 }
