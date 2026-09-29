@@ -29,7 +29,9 @@ typedef void (^SCProgressBlock)(NSInteger percent, NSString *message);
                          maxThreads:(NSInteger)maxThreads
                            progress:(nullable SCProgressBlock)progress;
 
-/// Folder inside the app bundle that holds profiles/BBL.json and profiles/BBL/.
+/// Folder inside the app bundle (BambuResources/) that holds profiles/BBL.json and profiles/BBL/.
+/// Not "resources": a top-level Resources/ folder makes CFBundle treat the app as an
+/// old-style bundle and look for Resources/Info.plist ("Missing bundle ID" on install).
 + (NSString *)resourcesPath;
 
 @end

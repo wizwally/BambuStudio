@@ -9,7 +9,7 @@
 
 + (NSString *)resourcesPath
 {
-    return [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"resources"];
+    return [[[NSBundle mainBundle] resourcePath] stringByAppendingPathComponent:@"BambuResources"];
 }
 
 + (NSString *)dataPath

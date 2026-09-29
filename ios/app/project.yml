@@ -54,8 +54,9 @@ targets:
           set -e
           ROOT="${SRCROOT}/../.."
           DEST="${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
-          mkdir -p "${DEST}/resources/profiles" "${DEST}/TestModels"
-          rsync -a --delete "${ROOT}/resources/profiles/BBL/" "${DEST}/resources/profiles/BBL/"
-          cp "${ROOT}/resources/profiles/BBL.json" "${DEST}/resources/profiles/BBL.json"
+          rm -rf "${DEST}/resources"   # never ship a top-level resources/ folder (see SlicerBridge.h)
+          mkdir -p "${DEST}/BambuResources/profiles" "${DEST}/TestModels"
+          rsync -a --delete "${ROOT}/resources/profiles/BBL/" "${DEST}/BambuResources/profiles/BBL/"
+          cp "${ROOT}/resources/profiles/BBL.json" "${DEST}/BambuResources/profiles/BBL.json"
           [ -f "${ROOT}/ios/test/models/cube20.stl" ] || /usr/bin/python3 "${ROOT}/ios/tools/make_test_models.py"
           cp "${ROOT}/ios/test/models/"*.stl "${DEST}/TestModels/"
