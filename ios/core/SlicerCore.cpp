@@ -86,14 +86,32 @@ PresetNames list_presets(const std::string& resources_dir, const std::string& da
 
     PresetNames out;
     for (const Preset& p : bundle.printers)
-        if (p.is_system && p.is_visible)
+        if (p.is_system && p.is_visible) {
             out.printers.push_back(p.name);
+            auto* model = p.config.option<ConfigOptionString>("printer_model");
+            out.printer_models.push_back(model ? model->value : std::string());
+        }
     for (const Preset& p : bundle.prints)
         if (p.is_system && p.is_visible && lists_printer(p, printer_filter))
             out.processes.push_back(p.name);
     for (const Preset& p : bundle.filaments)
         if (p.is_system && p.is_visible && lists_printer(p, printer_filter))
             out.filaments.push_back(p.name);
+
+    if (const Preset* printer = printer_filter.empty() ? nullptr : bundle.printers.find_preset(printer_filter, false)) {
+        auto contains = [](const std::vector<std::string>& v, const std::string& x) {
+            return std::find(v.begin(), v.end(), x) != v.end();
+        };
+        if (auto* opt = printer->config.option<ConfigOptionString>("default_print_profile"))
+            if (contains(out.processes, opt->value))
+                out.default_process = opt->value;
+        if (auto* opt = printer->config.option<ConfigOptionStrings>("default_filament_profile"))
+            for (const std::string& f : opt->values)
+                if (contains(out.filaments, f)) {
+                    out.default_filament = f;
+                    break;
+                }
+    }
     return out;
 }
 

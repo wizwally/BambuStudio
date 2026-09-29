@@ -15,6 +15,17 @@
 @implementation SCMesh
 @end
 
+@implementation SCPresetList
+@end
+
+static NSArray<NSString *> *NSStrings(const std::vector<std::string> &v)
+{
+    NSMutableArray<NSString *> *out = [NSMutableArray arrayWithCapacity:v.size()];
+    for (const std::string &s : v)
+        [out addObject:[NSString stringWithUTF8String:s.c_str()] ?: @""];
+    return out;
+}
+
 // Hands a std::vector to NSData without copying: the vector is moved to the heap
 // and freed when the NSData goes away (toolpaths can be tens of MB).
 template<typename T>
@@ -132,6 +143,23 @@ static NSString *NSStr(const std::string &s)
     out.bedHeight = m.bed_height;
     out.vertices = DataFromVector(std::move(m.vertices));
     out.bedOutline = DataFromVector(std::move(m.bed_outline));
+    return out;
+}
+
++ (SCPresetList *)presetsForPrinter:(NSString *)printer
+{
+    auto t0 = std::chrono::steady_clock::now();
+    SlicerCore::PresetNames names = SlicerCore::list_presets([self resourcesPath].UTF8String,
+                                                             [self dataPath].UTF8String, "BBL",
+                                                             printer ? printer.UTF8String : "");
+    SCPresetList *out = [SCPresetList new];
+    out.printers = NSStrings(names.printers);
+    out.printerModels = NSStrings(names.printer_models);
+    out.processes = NSStrings(names.processes);
+    out.filaments = NSStrings(names.filaments);
+    out.defaultProcess = NSStr(names.default_process);
+    out.defaultFilament = NSStr(names.default_filament);
+    out.loadSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     return out;
 }
 

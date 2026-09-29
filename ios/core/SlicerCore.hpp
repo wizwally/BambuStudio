@@ -87,6 +87,10 @@ std::string role_name(int role);
 // Lists printer / process / filament preset names loaded from the vendor bundle.
 struct PresetNames {
     std::vector<std::string> printers, processes, filaments;
+    std::vector<std::string> printer_models;  // printer_model of each entry in printers ("Bambu Lab P1S")
+    // With a printer filter: that printer's default process and first default filament
+    // (empty if unknown or not in the lists above).
+    std::string default_process, default_filament;
 };
 PresetNames list_presets(const std::string& resources_dir, const std::string& data_dir,
                          const std::string& vendor = "BBL", const std::string& printer_filter = "");

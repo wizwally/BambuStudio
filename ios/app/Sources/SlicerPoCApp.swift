@@ -1,16 +1,10 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-// Fixed profiles for the PoC: Gualti's Bambu Lab P1S, 0.4 nozzle, PLA Basic.
-enum Profiles {
-    static let printer = "Bambu Lab P1S 0.4 nozzle"
-    static let process = "0.20mm Standard @BBL X1C"
-    static let filament = "Bambu PLA Basic @BBL P1S 0.4 nozzle"
-}
-
 struct SliceRun: Identifiable {
     let id = UUID()
     let model: String
+    let profile: SliceProfile
     let result: SCSliceResult
 
     var summary: String {
@@ -30,12 +24,18 @@ final class SliceModel: ObservableObject {
     @Published var runs: [SliceRun] = []
     @Published var lastGCode: URL?
     @Published var meshInfo = ""
+    /// Model shown in the viewport, re-sliced when the profile changes.
+    @Published private(set) var current: (url: URL, name: String)?
+    /// Profile used for the current preview.
+    @Published private(set) var slicedProfile: SliceProfile?
 
     let threads = ProcessInfo.processInfo.activeProcessorCount
     let viewport: ViewportState
+    let presets: PresetStore
 
-    init(viewport: ViewportState) {
+    init(viewport: ViewportState, presets: PresetStore) {
         self.viewport = viewport
+        self.presets = presets
     }
 
     func bundledModel(_ name: String) -> URL? {
@@ -43,12 +43,12 @@ final class SliceModel: ObservableObject {
     }
 
     /// Loads the model into the 3D view, as it will be placed on the bed.
-    func loadMesh(_ modelURL: URL, name: String) async -> SCMesh {
+    func loadMesh(_ modelURL: URL, name: String, profile: SliceProfile) async -> SCMesh {
         message = "Caricamento \(name)…"
         let threads = self.threads
         let mesh = await Task.detached(priority: .userInitiated) {
-            SCSlicer.loadMesh(atPath: modelURL.path, printer: Profiles.printer, process: Profiles.process,
-                              filament: Profiles.filament, maxThreads: threads)
+            SCSlicer.loadMesh(atPath: modelURL.path, printer: profile.printer, process: profile.process,
+                              filament: profile.filament, maxThreads: threads)
         }.value
         if mesh.ok {
             viewport.show(mesh: mesh)
@@ -60,7 +60,7 @@ final class SliceModel: ObservableObject {
         return mesh
     }
 
-    func slice(_ modelURL: URL, name: String) async -> SCSliceResult {
+    func slice(_ modelURL: URL, name: String, profile: SliceProfile) async -> SCSliceResult {
         busy = true
         percent = 0
         message = "Slicing \(name)…"
@@ -69,9 +69,9 @@ final class SliceModel: ObservableObject {
         let threads = self.threads
         let result = await Task.detached(priority: .userInitiated) {
             SCSlicer.sliceModel(atPath: modelURL.path,
-                                printer: Profiles.printer,
-                                process: Profiles.process,
-                                filament: Profiles.filament,
+                                printer: profile.printer,
+                                process: profile.process,
+                                filament: profile.filament,
                                 outputPath: out.path,
                                 maxThreads: threads,
                                 collectToolpaths: true) { pct, msg in
@@ -81,10 +81,11 @@ final class SliceModel: ObservableObject {
                 }
             }
         }.value
-        runs.insert(SliceRun(model: name, result: result), at: 0)
+        runs.insert(SliceRun(model: name, profile: profile, result: result), at: 0)
         if result.ok {
             lastGCode = URL(fileURLWithPath: result.gcodePath)
             viewport.show(toolpaths: result.toolpaths)
+            slicedProfile = profile
         }
         message = result.ok ? "Completato: \(name)" : "Errore: \(result.error)"
         busy = false
@@ -94,11 +95,25 @@ final class SliceModel: ObservableObject {
     /// Model first (immediate feedback in the 3D view), then slicing and layer preview.
     func open(_ modelURL: URL, name: String) async {
         busy = true
-        let mesh = await loadMesh(modelURL, name: name)
+        current = (modelURL, name)
+        slicedProfile = nil
+        let profile = presets.profile
+        let mesh = await loadMesh(modelURL, name: name, profile: profile)
         if mesh.ok {
-            _ = await slice(modelURL, name: name)
+            _ = await slice(modelURL, name: name, profile: profile)
         }
         busy = false
+    }
+
+    /// Reloads and re-slices the current model with the selected profile
+    /// (another printer can change the bed and the placement).
+    func reslice() async {
+        guard let current else { return }
+        await open(current.url, name: current.name)
+    }
+
+    var needsReslice: Bool {
+        current != nil && slicedProfile != nil && slicedProfile != presets.profile
     }
 
     func openImported(_ url: URL) async {
@@ -120,22 +135,42 @@ final class SliceModel: ObservableObject {
     /// "AUTOTEST {json}" line per model on stdout, then exits.
     func runAutotest() async {
         let tmp = FileManager.default.temporaryDirectory
-        for name in ["cube20", "sphere_dense"] {
+
+        // Preset lists: P1S (cold, then cached) and A1 mini defaults.
+        var presetJSON: [String: Any] = ["test": "presets_p1s"]
+        if let p1s = await presets.presets(for: SliceProfile.p1sDefault.printer) {
+            presetJSON = ["test": "presets_p1s", "printers": p1s.printers.count, "processes": p1s.processes.count,
+                          "filaments": p1s.filaments.count, "load_s": p1s.loadSeconds,
+                          "default_process": p1s.defaultProcess, "default_filament": p1s.defaultFilament]
+        }
+        emit(presetJSON)
+
+        var jobs: [(String, SliceProfile)] = [("cube20", .p1sDefault), ("sphere_dense", .p1sDefault)]
+        let mini = "Bambu Lab A1 mini 0.4 nozzle"
+        if let list = await presets.presets(for: mini) {
+            jobs.append(("cube20", SliceProfile(printer: mini, process: list.defaultProcess, filament: list.defaultFilament)))
+        } else {
+            emit(["test": "presets_a1mini", "ok": false, "error": presets.error])
+        }
+
+        for (name, profile) in jobs {
             guard let url = bundledModel(name) else {
                 print("AUTOTEST {\"model\":\"\(name)\",\"ok\":false,\"error\":\"model not bundled\"}")
                 continue
             }
-            var json: [String: Any] = ["model": name, "threads": threads]
+            let tag = profile == .p1sDefault ? name : name + "_a1mini"
+            var json: [String: Any] = ["model": name, "threads": threads, "printer": profile.printer,
+                                       "process": profile.process, "filament": profile.filament]
 
-            let mesh = await loadMesh(url, name: name)
+            let mesh = await loadMesh(url, name: name, profile: profile)
             json["mesh_ok"] = mesh.ok
             json["mesh_error"] = mesh.error
             json["mesh_triangles"] = mesh.triangleCount
             json["mesh_s"] = mesh.loadSeconds
             json["mesh_bbox"] = [mesh.minX, mesh.minY, mesh.minZ, mesh.maxX, mesh.maxY, mesh.maxZ]
-            json["png_model"] = snapshot(mode: .model, to: tmp.appendingPathComponent("autotest_\(name)_model.png"))
+            json["png_model"] = snapshot(mode: .model, to: tmp.appendingPathComponent("autotest_\(tag)_model.png"))
 
-            let r = await slice(url, name: name)
+            let r = await slice(url, name: name, profile: profile)
             json["ok"] = r.ok
             json["error"] = r.error
             json["warning"] = r.warning
@@ -148,22 +183,26 @@ final class SliceModel: ObservableObject {
             json["gcode_bytes"] = (try? FileManager.default.attributesOfItem(atPath: r.gcodePath)[.size] as? Int) ?? 0
             json["toolpath_segments"] = r.toolpaths?.segmentCount ?? 0
             json["toolpath_layers"] = r.toolpaths?.layerCount ?? 0
-            json["png_preview"] = snapshot(mode: .preview, to: tmp.appendingPathComponent("autotest_\(name)_preview.png"))
+            json["png_preview"] = snapshot(mode: .preview, to: tmp.appendingPathComponent("autotest_\(tag)_preview.png"))
             if viewport.layerCount > 2 {
                 viewport.lastLayer = viewport.layerCount / 2
                 viewport.dimLowerLayers = true
                 json["png_preview_half"] = snapshot(mode: .preview,
-                                                    to: tmp.appendingPathComponent("autotest_\(name)_preview_half.png"))
+                                                    to: tmp.appendingPathComponent("autotest_\(tag)_preview_half.png"))
                 viewport.dimLowerLayers = false
             }
 
-            if let data = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]),
-               let line = String(data: data, encoding: .utf8) {
-                print("AUTOTEST \(line)")
-            }
+            emit(json)
         }
         fflush(stdout)
         exit(0)
+    }
+
+    private func emit(_ json: [String: Any]) {
+        if let data = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]),
+           let line = String(data: data, encoding: .utf8) {
+            print("AUTOTEST \(line)")
+        }
     }
 
     private func snapshot(mode: ViewportRenderer.Mode, to url: URL) -> String {
@@ -180,12 +219,15 @@ final class SliceModel: ObservableObject {
 @main
 struct SlicerPoCApp: App {
     @StateObject private var viewport: ViewportState
+    @StateObject private var presets: PresetStore
     @StateObject private var model: SliceModel
 
     init() {
         let viewport = ViewportState()
+        let presets = PresetStore()
         _viewport = StateObject(wrappedValue: viewport)
-        _model = StateObject(wrappedValue: SliceModel(viewport: viewport))
+        _presets = StateObject(wrappedValue: presets)
+        _model = StateObject(wrappedValue: SliceModel(viewport: viewport, presets: presets))
     }
 
     var body: some Scene {
@@ -193,9 +235,12 @@ struct SlicerPoCApp: App {
             ContentView()
                 .environmentObject(model)
                 .environmentObject(viewport)
+                .environmentObject(presets)
                 .task {
                     if ProcessInfo.processInfo.arguments.contains("-autotest") {
                         await model.runAutotest()
+                    } else {
+                        await presets.load()
                     }
                 }
         }
@@ -205,21 +250,25 @@ struct SlicerPoCApp: App {
 struct ContentView: View {
     @EnvironmentObject var model: SliceModel
     @EnvironmentObject var viewport: ViewportState
+    @EnvironmentObject var presets: PresetStore
     @State private var importing = false
 
     var body: some View {
         NavigationSplitView {
             List {
-                Section("Profilo") {
-                    LabeledContent("Stampante", value: Profiles.printer)
-                    LabeledContent("Processo", value: Profiles.process)
-                    LabeledContent("Filamento", value: Profiles.filament)
-                    LabeledContent("Thread", value: "\(model.threads)")
-                }
+                ProfileSection()
+                    .disabled(model.busy)
                 Section("Modello") {
                     Button("Cubo 20 mm") { start("cube20") }
                     Button("Sfera densa (~200k triangoli)") { start("sphere_dense") }
                     Button("Importa STL / 3MF…") { importing = true }
+                    if model.needsReslice {
+                        Button {
+                            Task { await model.reslice() }
+                        } label: {
+                            Label("Affetta di nuovo con il profilo scelto", systemImage: "arrow.clockwise")
+                        }
+                    }
                 }
                 .disabled(model.busy)
                 Section("Stato") {
@@ -234,6 +283,7 @@ struct ContentView: View {
                     ForEach(model.runs) { run in
                         VStack(alignment: .leading) {
                             Text(run.model).font(.headline)
+                            Text("\(run.profile.printer) · \(run.profile.process)").font(.caption2).foregroundStyle(.secondary)
                             Text(run.summary).font(.caption).foregroundStyle(run.result.ok ? Color.primary : Color.red)
                         }
                     }
@@ -260,5 +310,50 @@ struct ContentView: View {
             return
         }
         Task { await model.open(url, name: name) }
+    }
+}
+
+/// Printer / process / filament pickers, fed by PresetStore.
+struct ProfileSection: View {
+    @EnvironmentObject var presets: PresetStore
+    @EnvironmentObject var model: SliceModel
+
+    var body: some View {
+        Section {
+            Picker("Stampante", selection: Binding(get: { presets.profile.printer },
+                                                   set: { p in Task { await presets.select(printer: p) } })) {
+                ForEach(presets.printerGroups) { group in
+                    Section(group.id) {
+                        ForEach(group.names, id: \.self) { Text($0).tag($0) }
+                    }
+                }
+            }
+            .pickerStyle(.navigationLink)
+
+            Picker("Processo", selection: Binding(get: { presets.profile.process },
+                                                  set: { presets.select(process: $0) })) {
+                ForEach(presets.processes, id: \.self) { Text($0).tag($0) }
+            }
+            .pickerStyle(.navigationLink)
+
+            Picker("Filamento", selection: Binding(get: { presets.profile.filament },
+                                                   set: { presets.select(filament: $0) })) {
+                ForEach(presets.filamentGroups) { group in
+                    Section(group.id) {
+                        ForEach(group.names, id: \.self) { Text($0).tag($0) }
+                    }
+                }
+            }
+            .pickerStyle(.navigationLink)
+
+            LabeledContent("Thread", value: "\(model.threads)")
+        } header: {
+            HStack {
+                Text("Profilo")
+                if presets.loading { ProgressView().controlSize(.small) }
+            }
+        } footer: {
+            if !presets.error.isEmpty { Text(presets.error).foregroundStyle(.red) }
+        }
     }
 }

@@ -62,6 +62,8 @@ int main(int argc, char** argv)
         for (auto& n : names.processes) std::cout << n << "\n";
         std::cout << "# filaments (" << names.filaments.size() << ")\n";
         for (auto& n : names.filaments) std::cout << n << "\n";
+        if (!names.default_process.empty() || !names.default_filament.empty())
+            std::cout << "# defaults\n" << names.default_process << "\n" << names.default_filament << "\n";
         return 0;
     }
 
