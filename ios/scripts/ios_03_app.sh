@@ -32,7 +32,7 @@ echo "Simulatore: $(xcrun simctl list devices | grep "$UDID")"
 
 xcodebuild -project SlicerPoC.xcodeproj -scheme SlicerPoC -configuration Release \
     -destination "id=$UDID" -derivedDataPath "$DERIVED" \
-    CODE_SIGNING_ALLOWED=NO build > "$ROOT/ios/logs/ios_03_xcodebuild.log" 2>&1 || true
+    CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO build > "$ROOT/ios/logs/ios_03_xcodebuild.log" 2>&1 || true
 grep -E "error:|\*\* BUILD" "$ROOT/ios/logs/ios_03_xcodebuild.log" | head -40 || true
 
 APP="$DERIVED/Build/Products/Release-iphonesimulator/SlicerPoC.app"

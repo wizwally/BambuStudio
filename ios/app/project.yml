@@ -12,7 +12,7 @@ settings:
     SWIFT_VERSION: "5.0"
     CLANG_CXX_LANGUAGE_STANDARD: c++17
     CLANG_CXX_LIBRARY: libc++
-    TARGETED_DEVICE_FAMILY: "2"          # iPad only
+    TARGETED_DEVICE_FAMILY: "2"          # iPad only (also set on the target below)
     ENABLE_USER_SCRIPT_SANDBOXING: NO    # the resource script reads ../../resources
     DEAD_CODE_STRIPPING: YES
     CODE_SIGN_STYLE: Automatic
@@ -37,6 +37,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.wizwally.slicerpoc
         PRODUCT_NAME: SlicerPoC
+        TARGETED_DEVICE_FAMILY: "2"
         SWIFT_OBJC_BRIDGING_HEADER: Sources/SlicerPoC-Bridging-Header.h
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Slicer PoC
