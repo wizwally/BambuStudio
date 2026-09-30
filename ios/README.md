@@ -16,6 +16,10 @@ Obiettivo: usare il motore di slicing di BambuStudio (libslic3r) su iPad Pro M4,
 | `scripts/mac_01_deps.sh` | Compila le dipendenze per macOS arm64 (senza wxWidgets/FFmpeg/GLFW) |
 | `scripts/mac_02_core.sh` | Compila libslic3r + core con `SLIC3R_CORE_ONLY=ON` |
 | `scripts/mac_03_test.sh` | Affetta i modelli di test e li confronta con BambuStudio.app |
+| `scripts/ios_01_deps.sh` | Dipendenze per iPadOS (`PLATFORM=iphonesimulator` per il Simulatore) |
+| `scripts/ios_02_core.sh` | libslic3r + core per iPadOS, impacchettati in `build/SlicerCore.xcframework` |
+| `scripts/ios_03_app.sh` | App di prova nel Simulatore iPad, con autotest e immagini in `logs/autotest/` |
+| `scripts/ios_04_device.sh` | App su iPad vero: `--build-only` verifica la build senza firma; senza opzioni firma (Personal Team gratuito), installa e lancia l'autotest |
 | `tools/make_test_models.py` | Genera i modelli di test in `test/models/`: `cube20.stl` (semplice), `sphere_dense.stl` (circa 200k triangoli) |
 
 Modifiche fuori da `ios/` (tenute minime per facilitare il rebase con upstream):
