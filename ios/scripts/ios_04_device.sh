@@ -111,8 +111,9 @@ xcrun devicectl device install app --device "$UDID" "$APP"
 [ "$MODE" = "--no-test" ] && exit 0
 
 echo "=== autotest (sull'iPad, lascialo sbloccato)"
+# "--" ends devicectl's options: without it "-autotest" is parsed as its own flags (-t ...).
 if ! xcrun devicectl device process launch --device "$UDID" --console --terminate-existing \
-        "$BUNDLE_ID" -autotest 2>&1 | tee "${TMPDIR:-/tmp}/slicerpoc_autotest.txt" | grep "AUTOTEST"; then
+        -- "$BUNDLE_ID" -autotest 2>&1 | tee "${TMPDIR:-/tmp}/slicerpoc_autotest.txt" | grep "AUTOTEST"; then
     echo "Avvio non riuscito. Se l'errore parla di profilo non attendibile: sull'iPad"
     echo "Impostazioni > Generali > VPN e gestione dispositivi > il tuo Apple ID > Autorizza, poi rilancia."
     tail -5 "${TMPDIR:-/tmp}/slicerpoc_autotest.txt"
