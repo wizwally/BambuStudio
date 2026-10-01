@@ -221,6 +221,8 @@ struct SlicerPoCApp: App {
     @StateObject private var viewport: ViewportState
     @StateObject private var presets: PresetStore
     @StateObject private var model: SliceModel
+    @StateObject private var printer = PrinterConnection()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         let viewport = ViewportState()
@@ -236,13 +238,21 @@ struct SlicerPoCApp: App {
                 .environmentObject(model)
                 .environmentObject(viewport)
                 .environmentObject(presets)
+                .environmentObject(printer)
                 .task {
-                    if ProcessInfo.processInfo.arguments.contains("-autotest") {
+                    let args = ProcessInfo.processInfo.arguments
+                    if let i = args.firstIndex(of: "-printertest"), args.count > i + 3 {
+                        await PrinterAutotest.run(printer, host: args[i + 1], serial: args[i + 2], code: args[i + 3])
+                    } else if args.contains("-autotest") {
                         await model.runAutotest()
                     } else {
                         await presets.load()
+                        if printer.hasConfiguration { printer.connect() }
                     }
                 }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { printer.resume() }
         }
     }
 }
@@ -258,6 +268,9 @@ struct ContentView: View {
             List {
                 ProfileSection()
                     .disabled(model.busy)
+                Section("Stampante") {
+                    PrinterSummaryRow()
+                }
                 Section("Modello") {
                     Button("Cubo 20 mm") { start("cube20") }
                     Button("Sfera densa (~200k triangoli)") { start("sphere_dense") }
@@ -355,5 +368,54 @@ struct ProfileSection: View {
         } footer: {
             if !presets.error.isEmpty { Text(presets.error).foregroundStyle(.red) }
         }
+    }
+}
+
+/// `-printertest <host> <serial> <code>`: connects to a printer (or ios/tools/fake_printer.py),
+/// waits for status reports, prints one "AUTOTEST {json}" line and exits.
+@MainActor
+enum PrinterAutotest {
+    static func run(_ printer: PrinterConnection, host: String, serial: String, code: String) async {
+        let start = Date()
+        printer.connectForTest(host: host, serial: serial, accessCode: code)
+        var firstStatus: Double?
+        var percentAtFirst: Int?
+        // Up to 15 s: first full report, then at least two incremental updates.
+        while Date().timeIntervalSince(start) < 15 {
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            if case .failed = printer.state { break }
+            if !printer.status.isEmpty, firstStatus == nil {
+                firstStatus = Date().timeIntervalSince(start)
+                percentAtFirst = printer.status.percent
+            }
+            if firstStatus != nil, printer.messageCount >= 3, printer.status.percent != percentAtFirst { break }
+        }
+        let s = printer.status
+        var json: [String: Any] = [
+            "test": "printer", "state": printer.state.label, "connected": printer.state == .connected,
+            "messages": printer.messageCount, "first_status_s": firstStatus ?? -1,
+            "gcode_state": s.gcodeState, "job": s.jobName, "percent_first": percentAtFirst ?? -1,
+            "percent": s.percent ?? -1, "layer": s.layer ?? -1, "total_layers": s.totalLayers ?? -1,
+            "remaining_min": s.remainingMinutes ?? -1, "nozzle": s.nozzle ?? -1, "nozzle_target": s.nozzleTarget ?? -1,
+            "bed": s.bed ?? -1, "part_fan": s.partFan ?? -1, "firmware": s.firmware,
+            "trays": s.trays.map { "\($0.id):\($0.type)\($0.active ? "*" : "")" },
+            "cert_pinned": String(printer.pinnedCertificate?.prefix(16) ?? ""),
+        ]
+        // Second connection: the pinned certificate must be accepted again.
+        printer.disconnect()
+        printer.connect()
+        let t2 = Date()
+        while Date().timeIntervalSince(t2) < 5, printer.state != .connected {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            if case .failed = printer.state { break }
+        }
+        json["reconnect_with_pin"] = printer.state == .connected
+        printer.disconnect()
+        if let data = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]),
+           let line = String(data: data, encoding: .utf8) {
+            print("AUTOTEST \(line)")
+        }
+        fflush(stdout)
+        exit(0)
     }
 }

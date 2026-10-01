@@ -6,6 +6,7 @@
 # Log: ios/logs/ios_03_app.log
 # Usage: ios/scripts/ios_03_app.sh            (build + autotest on the Simulator)
 #        ios/scripts/ios_03_app.sh --open     (also leave the app open in the Simulator)
+#        ios/scripts/ios_03_app.sh --printer-test   (status monitor against ios/tools/fake_printer.py)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -48,6 +49,20 @@ TMPAPP="${TMPDIR:-/tmp}/SlicerPoC.app"
 rm -rf "$TMPAPP"
 ditto "$APP" "$TMPAPP"
 xcrun simctl install "$UDID" "$TMPAPP"
+if [ "${1:-}" = "--printer-test" ]; then
+    # App against ios/tools/fake_printer.py (a fake P1S on 127.0.0.1:8883).
+    echo "=== test stampante (finta)"
+    /usr/bin/python3 "$ROOT/ios/tools/fake_printer.py" > "$ROOT/ios/logs/fake_printer.log" 2>&1 &
+    FAKE=$!
+    sleep 2
+    xcrun simctl launch --console-pty --terminate-running-process "$UDID" "$BUNDLE_ID" \
+        -printertest 127.0.0.1 01P00TEST000001 12345678 | grep "AUTOTEST" || true
+    kill "$FAKE" 2>/dev/null || true
+    echo "--- stampante finta"
+    cat "$ROOT/ios/logs/fake_printer.log"
+    exit 0
+fi
+
 echo "=== autotest"
 xcrun simctl launch --console-pty --terminate-running-process "$UDID" "$BUNDLE_ID" -autotest | grep "AUTOTEST" || true
 
