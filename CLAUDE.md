@@ -128,14 +128,14 @@ ios/scripts/ios_04_device.sh --no-test     # sign + install only
 - Real iPad: app installed and running, slices models imported from iCloud. Gualti checked a 3DBenchy G-code
   and it looked right; a physical print test is pending.
 - Printer monitor: `fake_printer.py` tested with paho-mqtt (connect, bad code rejected, pushall, deltas).
-  The Swift client has **not** been run yet: `ios_03_app.sh --printer-test` is the next thing to run.
+  The Swift client passes `ios_03_app.sh --printer-test` against it (pinning, reconnect, delta merge).
+  On the real P1S (firmware 01.10.00.00, Developer Mode off) it connects and shows state "Inattiva" and correct
+  temperatures. P1P/P1S/A1/A1 mini report a bogus `chamber_temper` (e.g. 5), so the UI hides it by serial prefix.
 
 ## Backlog (in order)
 
-1. **Verify the LAN status monitor** (code committed in `dae83498f`, never built):
-   - run `ios_03_app.sh --printer-test` and fix any compile or runtime issue;
-   - then on the iPad against the real P1S (`ios_04_device.sh --no-test`, enter IP/serial/access code in the "Stampante" panel; allow Local Network).
-   Read the P1S firmware version from the panel: the next step depends on it.
+1. ~~Verify the LAN status monitor~~ done: fake printer test passes, real P1S verified (firmware 01.10.00.00).
+   Gualti's P1S currently has **Developer Mode off** (status only); he must enable LAN-only + Developer Mode before step 2 can be tested.
 2. **Send and start prints (LAN)**. Prerequisite decided by Gualti: P1S in **LAN-only + Developer Mode**
    (P1 series: firmware ≥ 01.08.02.00). This loses Bambu Handy and cloud printing; firmware updates then go via microSD.
    Ask him before assuming it is enabled. Plan:

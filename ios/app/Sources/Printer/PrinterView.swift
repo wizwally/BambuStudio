@@ -145,12 +145,18 @@ struct PrinterPanel: View {
         }
     }
 
+    /// P1P/P1S/A1/A1 mini have no chamber sensor but still report a bogus
+    /// chamber_temper (e.g. 5), so hide it by serial prefix.
+    private var hasChamberSensor: Bool {
+        !["01P", "01S", "030", "039"].contains { printer.serial.hasPrefix($0) }
+    }
+
     private var temperatureSection: some View {
         let s = printer.status
         return Section("Temperature e ventole") {
             temperature("Ugello", s.nozzle, s.nozzleTarget)
             temperature("Piatto", s.bed, s.bedTarget)
-            if let c = s.chamber, c > 0 { temperature("Camera", c, nil) }
+            if hasChamberSensor, let c = s.chamber, c > 0 { temperature("Camera", c, nil) }
             if let f = s.partFan { LabeledContent("Ventola pezzo", value: "\(f)%") }
             if let f = s.auxFan { LabeledContent("Ventola ausiliaria", value: "\(f)%") }
             if let f = s.chamberFan { LabeledContent("Ventola camera", value: "\(f)%") }
